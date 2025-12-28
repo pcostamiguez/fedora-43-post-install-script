@@ -7,7 +7,9 @@
 # -----------------------------------------------------------------------------
 # Data: 1 de dezembro de 2025
 # Autor: Xerxes Lins (vivaolinux.com.br/~xerxeslins)
-# Versão: 2.0
+# Modificado por: PHCM (vivaolinux.com.br/~pedrola)
+# Revisão técnica e hardening: 2025
+# Versão: 2.2
 # Descrição: Script de pós instalação do Fedora Workstation 43+.
 # -----------------------------------------------------------------------------
 
@@ -23,7 +25,7 @@ USUARIO_REAL=${SUDO_USER:-$USER}
 imprimir_cabecalho() {
     clear
     echo -e "${AZUL}==========================================================${SEM_COR}"
-    echo -e "${AZUL}      PÓS-INSTALAÇÃO FEDORA (SCRIPT V4 BLINDADO)          ${SEM_COR}"
+    echo -e "${AZUL}      PÓS-INSTALAÇÃO FEDORA (SCRIPT BLINDADO)             ${SEM_COR}"
     echo -e "${AZUL}==========================================================${SEM_COR}"
     echo -e "Usuário: ${AMARELO}$USUARIO_REAL${SEM_COR}"
     echo ""
@@ -42,152 +44,181 @@ perguntar() {
 }
 
 if [[ $EUID -ne 0 ]]; then
-   echo -e "${VERMELHO}ERRO: Rode com sudo.${SEM_COR}" 
+   echo -e "${VERMELHO}ERRO: Rode com sudo.${SEM_COR}"
    exit 1
 fi
 
 imprimir_cabecalho
 
-# 1. DNF (Limpeza e Otimização)
-if perguntar "Otimizar DNF (Downloads paralelos)?"; then
+# ------------------------------------------------------------------------------
+# 1. DNF (OTIMIZAÇÃO)
+# ------------------------------------------------------------------------------
+if perguntar "Otimizar DNF (downloads paralelos)?"; then
     sed -i '/max_parallel_downloads/d' /etc/dnf/dnf.conf
     sed -i '/defaultyes/d' /etc/dnf/dnf.conf
     echo "max_parallel_downloads=10" >> /etc/dnf/dnf.conf
     echo "defaultyes=True" >> /etc/dnf/dnf.conf
-    echo -e "${VERDE}DNF Otimizado.${SEM_COR}"
-    sleep 1
+    echo -e "${VERDE}DNF otimizado.${SEM_COR}"
 fi
 
+# ------------------------------------------------------------------------------
 # 2. RPM FUSION
-if perguntar "Habilitar RPM FUSION (Codecs/Drivers)?"; then
-    dnf install https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm -y
-    dnf install @core -y
-    echo -e "${VERDE}RPM Fusion OK.${SEM_COR}"
+# ------------------------------------------------------------------------------
+if perguntar "Habilitar RPM Fusion (codecs e drivers)?"; then
+    dnf install -y \
+        https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm \
+        https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
+    echo -e "${VERDE}RPM Fusion habilitado.${SEM_COR}"
 fi
 
-# 3. CODECS
-if perguntar "Instalar Codecs Multimídia (FFmpeg, GStreamer)?"; then
-    echo "Instalando pacotes de mídia..."
-    dnf install ffmpeg libavcodec-freeworld -y
-    dnf install gstreamer1-plugins-bad-free-extras gstreamer1-plugins-bad-freeworld gstreamer1-plugins-ugly gstreamer1-vaapi -y
-    dnf install @multimedia -y --skip-unavailable
-    dnf install gstreamer1-plugin-openh264 mozilla-openh264 -y
-    echo -e "${VERDE}Codecs instalados!${SEM_COR}"
+# ------------------------------------------------------------------------------
+# 3. CODECS MULTIMÍDIA
+# ------------------------------------------------------------------------------
+if perguntar "Instalar codecs multimídia?"; then
+    dnf install -y \
+        ffmpeg \
+        libavcodec-freeworld \
+        gstreamer1-plugins-bad-free-extras \
+        gstreamer1-plugins-bad-freeworld \
+        gstreamer1-plugins-ugly \
+        gstreamer1-vaapi \
+        gstreamer1-plugin-openh264 \
+        mozilla-openh264 \
+        @multimedia --skip-unavailable
+    echo -e "${VERDE}Codecs instalados.${SEM_COR}"
 fi
 
+# ------------------------------------------------------------------------------
 # 4. FLATHUB
+# ------------------------------------------------------------------------------
 if perguntar "Habilitar Flathub?"; then
     flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-    echo -e "${VERDE}Flathub OK.${SEM_COR}"
+    echo -e "${VERDE}Flathub habilitado.${SEM_COR}"
 fi
 
-# 5. NAVEGADORES (MÉTODO REPO MANUAL - À PROVA DE DNF5)
+# ------------------------------------------------------------------------------
+# 5. NAVEGADORES
+# ------------------------------------------------------------------------------
 echo -e "${AZUL}--- NAVEGADORES ---${SEM_COR}"
 
-# Google Chrome (Correção de Chave GPG)
 if perguntar "Instalar Google Chrome?"; then
-    dnf install fedora-workstation-repositories -y
-    # Importar chave antes para evitar erro de lock
+    dnf install -y fedora-workstation-repositories
     rpm --import https://dl.google.com/linux/linux_signing_key.pub
-    # Habilitar via comando direto no DNF5
     dnf config-manager setopt google-chrome.enabled=1
-    dnf install google-chrome-stable -y
-    echo -e "${VERDE}Chrome OK.${SEM_COR}"
+    dnf install -y google-chrome-stable
 fi
 
-# Microsoft Edge (Correção de Repositório Manual)
 if perguntar "Instalar Microsoft Edge?"; then
     rpm --import https://packages.microsoft.com/keys/microsoft.asc
-    # Criar arquivo .repo manualmente (Funciona em qualquer versão do DNF)
-    echo -e "[microsoft-edge]\nname=Microsoft Edge\nbaseurl=https://packages.microsoft.com/yumrepos/edge\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" > /etc/yum.repos.d/microsoft-edge.repo
-    dnf install microsoft-edge-stable -y
-    echo -e "${VERDE}Edge OK.${SEM_COR}"
+    cat > /etc/yum.repos.d/microsoft-edge.repo <<EOF
+[microsoft-edge]
+name=Microsoft Edge
+baseurl=https://packages.microsoft.com/yumrepos/edge
+enabled=1
+gpgcheck=1
+gpgkey=https://packages.microsoft.com/keys/microsoft.asc
+EOF
+    dnf install -y microsoft-edge-stable
 fi
 
-# Brave Browser (Correção de Repositório Manual)
-if perguntar "Instalar Brave?"; then
+if perguntar "Instalar Brave Browser?"; then
     rpm --import https://brave-browser-rpm-release.s3.brave.com/brave-core.asc
-    # Criar arquivo .repo manualmente
-    echo -e "[brave-browser]\nname=Brave Browser\nbaseurl=https://brave-browser-rpm-release.s3.brave.com/x86_64/\nenabled=1\ngpgcheck=1\ngpgkey=https://brave-browser-rpm-release.s3.brave.com/brave-core.asc" > /etc/yum.repos.d/brave-browser.repo
-    dnf install brave-browser -y
-    echo -e "${VERDE}Brave OK.${SEM_COR}"
+    cat > /etc/yum.repos.d/brave-browser.repo <<EOF
+[brave-browser]
+name=Brave Browser
+baseurl=https://brave-browser-rpm-release.s3.brave.com/x86_64/
+enabled=1
+gpgcheck=1
+gpgkey=https://brave-browser-rpm-release.s3.brave.com/brave-core.asc
+EOF
+    dnf install -y brave-browser
 fi
 
-# 6. TELEGRAM
-if perguntar "Instalar Telegram (Oficial)?"; then
-    echo "Baixando..."
-    cd /tmp
+# ------------------------------------------------------------------------------
+# 6. TELEGRAM (OFICIAL)
+# ------------------------------------------------------------------------------
+if perguntar "Instalar Telegram Desktop (oficial)?"; then
+    cd /tmp || exit 1
     wget -O telegram.tar.xz https://telegram.org/dl/desktop/linux
     rm -rf /opt/Telegram
     tar -xf telegram.tar.xz
     mv Telegram /opt/
     ln -sf /opt/Telegram/Telegram /usr/bin/telegram
-    
-    cat > /usr/share/applications/telegram.desktop <<EOF
-[Desktop Entry]
-Name=Telegram Desktop
-Comment=Official Telegram Desktop
-Exec=/opt/Telegram/Telegram -- %u
-Icon=telegram
-Terminal=false
-StartupWMClass=TelegramDesktop
-Type=Application
-Categories=Chat;Network;InstantMessaging;
-MimeType=x-scheme-handler/tg;
-EOF
-    wget -O /usr/share/icons/hicolor/128x128/apps/telegram.png https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/Telegram_logo.svg/1024px-Telegram_logo.svg.png
-    echo -e "${VERDE}Telegram OK.${SEM_COR}"
 fi
 
-# 7. EXTRAS GNOME
-if perguntar "Instalar Tweaks e Extensões?"; then
-    dnf install gnome-tweaks gnome-extensions-app -y
-    echo -e "${VERDE}Ferramentas OK.${SEM_COR}"
+# ------------------------------------------------------------------------------
+# 7. GNOME TWEAKS E EXTENSÕES
+# ------------------------------------------------------------------------------
+if perguntar "Instalar GNOME Tweaks e utilitários GNOME?"; then
+    dnf install -y gnome-tweaks gnome-extensions-app
 fi
 
-# 8. MUDAR SENHA
-if perguntar "Mudar senha do usuário $USUARIO_REAL?"; then
-    echo -e "${AMARELO}Digite a nova senha:${SEM_COR}"
-    passwd "$USUARIO_REAL"
+# ------------------------------------------------------------------------------
+# 8. SUPORTE A APPIMAGE (FUSE)
+# ------------------------------------------------------------------------------
+if perguntar "Habilitar suporte a AppImage (FUSE)?"; then
+    dnf install -y fuse fuse-libs
 fi
 
-# 9. ATUALIZAÇÃO
-if perguntar "Atualizar sistema agora?"; then
-    dnf update -y
-    dnf autoremove -y
-    echo -e "${VERDE}Sistema atualizado.${SEM_COR}"
+# ------------------------------------------------------------------------------
+# 9. EXTENSION MANAGER (FLATPAK)
+# ------------------------------------------------------------------------------
+if perguntar "Instalar Extension Manager (Flatpak)?"; then
+    flatpak install -y flathub com.mattjakeman.ExtensionManager
 fi
 
-echo ""
-echo -e "${VERDE}SCRIPT CONCLUÍDO! REINICIE O PC.${SEM_COR}"
+# ------------------------------------------------------------------------------
+# 10. APLICAÇÕES ESSENCIAIS
+# ------------------------------------------------------------------------------
+if perguntar "Instalar aplicações essenciais (VLC, Steam, GIMP etc.)?"; then
+    dnf install -y \
+        vlc \
+        steam \
+        transmission \
+        gimp \
+        geary \
+        unzip \
+        p7zip \
+        p7zip-plugins \
+        unrar
+fi
 
-# 10. NVIDIA DRIVER (FORÇAR NVIDIA ONLY - SEM BIOS)
-if perguntar "Instalar NVIDIA Proprietário e desativar GPU AMD (NVIDIA ONLY)?"; then
-    echo -e "${AZUL}Instalando drivers NVIDIA...${SEM_COR}"
-
-    # Garantir RPM Fusion habilitado
+# ------------------------------------------------------------------------------
+# 11. NVIDIA (FORÇAR NVIDIA ONLY - SEM BIOS)
+# ------------------------------------------------------------------------------
+if perguntar "Instalar NVIDIA proprietário e desativar GPU AMD (NVIDIA ONLY)?"; then
+    dnf install -y kernel-devel kernel-headers
     dnf install -y akmod-nvidia xorg-x11-drv-nvidia-cuda nvidia-settings nvidia-powerd
 
-    echo -e "${AZUL}Configurando kernel para NVIDIA...${SEM_COR}"
+    echo -e "${AZUL}Compilando módulos NVIDIA...${SEM_COR}"
+    akmods --force
 
-    # Forçar DRM da NVIDIA
     grubby --update-kernel=ALL --args="nvidia-drm.modeset=1"
 
-    # Blacklist do AMDGPU
     cat > /etc/modprobe.d/blacklist-amdgpu.conf <<EOF
 blacklist amdgpu
 options amdgpu modeset=0
 EOF
 
-    # Garantir blacklist de drivers conflitantes
     cat > /etc/modprobe.d/nvidia.conf <<EOF
 options nvidia-drm modeset=1
 EOF
 
-    echo -e "${AZUL}Recriando initramfs...${SEM_COR}"
     dracut --force
-
-    echo -e "${VERDE}Driver NVIDIA instalado e AMD desativado.${SEM_COR}"
-    echo -e "${AMARELO}Reinício OBRIGATÓRIO para aplicar.${SEM_COR}"
+    echo -e "${VERDE}NVIDIA configurada (AMD desativado).${SEM_COR}"
 fi
 
+# ------------------------------------------------------------------------------
+# 12. ATUALIZAÇÃO FINAL
+# ------------------------------------------------------------------------------
+if perguntar "Atualizar o sistema agora?"; then
+    dnf update -y
+    dnf autoremove -y
+fi
+
+# ------------------------------------------------------------------------------
+# FINAL
+# ------------------------------------------------------------------------------
+echo ""
+echo -e "${VERDE}SCRIPT CONCLUÍDO COM SUCESSO.${SEM_COR}"
+echo -e "${AMARELO}Reinicie o sistema para aplicar todas as alterações.${SEM_COR}"
