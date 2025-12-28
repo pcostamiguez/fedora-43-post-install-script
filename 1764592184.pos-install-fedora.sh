@@ -160,3 +160,34 @@ fi
 
 echo ""
 echo -e "${VERDE}SCRIPT CONCLUÍDO! REINICIE O PC.${SEM_COR}"
+
+# 10. NVIDIA DRIVER (FORÇAR NVIDIA ONLY - SEM BIOS)
+if perguntar "Instalar NVIDIA Proprietário e desativar GPU AMD (NVIDIA ONLY)?"; then
+    echo -e "${AZUL}Instalando drivers NVIDIA...${SEM_COR}"
+
+    # Garantir RPM Fusion habilitado
+    dnf install -y akmod-nvidia xorg-x11-drv-nvidia-cuda nvidia-settings nvidia-powerd
+
+    echo -e "${AZUL}Configurando kernel para NVIDIA...${SEM_COR}"
+
+    # Forçar DRM da NVIDIA
+    grubby --update-kernel=ALL --args="nvidia-drm.modeset=1"
+
+    # Blacklist do AMDGPU
+    cat > /etc/modprobe.d/blacklist-amdgpu.conf <<EOF
+blacklist amdgpu
+options amdgpu modeset=0
+EOF
+
+    # Garantir blacklist de drivers conflitantes
+    cat > /etc/modprobe.d/nvidia.conf <<EOF
+options nvidia-drm modeset=1
+EOF
+
+    echo -e "${AZUL}Recriando initramfs...${SEM_COR}"
+    dracut --force
+
+    echo -e "${VERDE}Driver NVIDIA instalado e AMD desativado.${SEM_COR}"
+    echo -e "${AMARELO}Reinício OBRIGATÓRIO para aplicar.${SEM_COR}"
+fi
+
